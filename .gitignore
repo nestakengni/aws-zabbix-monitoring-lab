@@ -1,0 +1,20 @@
+# Secrets
+.env
+*.pem
+*.key
+*.ppk
+
+# AWS credentials
+.aws/
+credentials
+
+# Environment files
+.env.*
+!.env.example
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
