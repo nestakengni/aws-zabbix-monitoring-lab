@@ -1,0 +1,73 @@
+---
+- name: Install and configure Zabbix Agent 2 on Linux
+  hosts: linux
+  become: true
+  gather_facts: true
+
+  vars:
+    zabbix_server_ip: "10.0.1.252"
+
+  tasks:
+    - name: Download Zabbix 7.4 repository package
+      ansible.builtin.get_url:
+        url: https://repo.zabbix.com/zabbix/7.4/release/ubuntu/pool/main/z/zabbix-release/zabbix-release_latest_7.4+ubuntu24.04_all.deb
+        dest: /tmp/zabbix-release.deb
+        mode: "0644"
+
+    - name: Install Zabbix repository
+      ansible.builtin.apt:
+        deb: /tmp/zabbix-release.deb
+        state: present
+
+    - name: Update APT cache
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Install Zabbix Agent 2
+      ansible.builtin.apt:
+        name: zabbix-agent2
+        state: present
+
+    - name: Configure Zabbix Server for passive checks
+      ansible.builtin.lineinfile:
+        path: /etc/zabbix/zabbix_agent2.conf
+        regexp: '^Server='
+        line: "Server={{ zabbix_server_ip }}"
+
+    - name: Configure Zabbix Server for active checks
+      ansible.builtin.lineinfile:
+        path: /etc/zabbix/zabbix_agent2.conf
+        regexp: '^ServerActive='
+        line: "ServerActive={{ zabbix_server_ip }}"
+
+    - name: Configure Linux hostname
+      ansible.builtin.lineinfile:
+        path: /etc/zabbix/zabbix_agent2.conf
+        regexp: '^Hostname='
+        line: "Hostname=Linux-Server"
+
+    - name: Enable and restart Zabbix Agent 2
+      ansible.builtin.service:
+        name: zabbix-agent2
+        enabled: true
+        state: restarted
+
+    - name: Check Zabbix Agent 2 service
+      ansible.builtin.command:
+        cmd: systemctl is-active zabbix-agent2
+      register: zabbix_agent_status
+      changed_when: false
+
+    - name: Display Zabbix Agent 2 status
+      ansible.builtin.debug:
+        msg: "Zabbix Agent 2 status: {{ zabbix_agent_status.stdout }}"
+
+    - name: Check listening port 10050
+      ansible.builtin.shell:
+        cmd: ss -lntp | grep ':10050'
+      register: zabbix_port
+      changed_when: false
+
+    - name: Display listening port
+      ansible.builtin.debug:
+        var: zabbix_port.stdout_lines

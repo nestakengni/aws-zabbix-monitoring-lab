@@ -18,3 +18,24 @@ credentials
 # OS
 .DS_Store
 Thumbs.db
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfplan
+terraform/crash.log
+terraform/crash.*.log
+.env
+.env.*
+*.pem
+*.key
+*.ppk
+credentials
+.aws/
+terraform/crash.*.log
+ansible/group_vars/*/vault.yml
+ansible/inventory.ini
+.vscode/
+.DS_Store
+desktop.ini
+terraform/tfplan

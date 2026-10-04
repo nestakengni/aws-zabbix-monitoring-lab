@@ -1,0 +1,4 @@
+zabbix_mysql_database: zabbix
+zabbix_mysql_user: zabbix
+zabbix_mysql_password: "CHANGE_ME"
+zabbix_mysql_root_password: "CHANGE_ME_ROOT"

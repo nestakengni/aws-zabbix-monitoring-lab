@@ -1,0 +1,73 @@
+---
+- name: Install and configure Zabbix Agent 2 on Zabbix Server host
+  hosts: zabbix
+  become: true
+  gather_facts: true
+
+  vars:
+    zabbix_server_ip: "10.0.1.252"
+
+  tasks:
+    - name: Download Zabbix 7.4 repository package
+      ansible.builtin.get_url:
+        url: https://repo.zabbix.com/zabbix/7.4/release/ubuntu/pool/main/z/zabbix-release/zabbix-release_latest_7.4+ubuntu24.04_all.deb
+        dest: /tmp/zabbix-release.deb
+        mode: "0644"
+
+    - name: Install Zabbix repository
+      ansible.builtin.apt:
+        deb: /tmp/zabbix-release.deb
+        state: present
+
+    - name: Update APT cache
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Install Zabbix Agent 2
+      ansible.builtin.apt:
+        name: zabbix-agent2
+        state: present
+
+    - name: Configure allowed Zabbix Server sources
+      ansible.builtin.lineinfile:
+        path: /etc/zabbix/zabbix_agent2.conf
+        regexp: '^Server='
+        line: 'Server=127.0.0.1,10.0.1.0/24,172.16.0.0/12'
+
+    - name: Configure active checks
+      ansible.builtin.lineinfile:
+        path: /etc/zabbix/zabbix_agent2.conf
+        regexp: '^ServerActive='
+        line: "ServerActive={{ zabbix_server_ip }}"
+
+    - name: Configure hostname
+      ansible.builtin.lineinfile:
+        path: /etc/zabbix/zabbix_agent2.conf
+        regexp: '^Hostname='
+        line: 'Hostname=Zabbix-Server'
+
+    - name: Enable and restart Zabbix Agent 2
+      ansible.builtin.service:
+        name: zabbix-agent2
+        enabled: true
+        state: restarted
+
+    - name: Check Zabbix Agent 2 service
+      ansible.builtin.command:
+        cmd: systemctl is-active zabbix-agent2
+      register: agent_status
+      changed_when: false
+
+    - name: Display service status
+      ansible.builtin.debug:
+        msg: "Zabbix Agent 2 status: {{ agent_status.stdout }}"
+
+    - name: Check port 10050
+      ansible.builtin.shell:
+        cmd: ss -lntp | grep ':10050'
+      register: agent_port
+      changed_when: false
+
+    - name: Display port 10050
+      ansible.builtin.debug:
+        var: agent_port.stdout_lines

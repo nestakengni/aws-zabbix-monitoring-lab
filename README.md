@@ -2,13 +2,25 @@
 
 # ☁️ AWS Zabbix Monitoring Lab
 
-### Supervision centralisée d'une infrastructure Linux & Windows sur AWS
+### Infrastructure AWS automatisée avec Terraform, Ansible, Docker et Zabbix
 
-![AWS](https://img.shields.io/badge/AWS-Cloud-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Containerization-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-![Zabbix](https://img.shields.io/badge/Zabbix-Monitoring-D40000?style=for-the-badge&logo=zabbix&logoColor=white)
-![Linux](https://img.shields.io/badge/Linux-Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
-![Windows](https://img.shields.io/badge/Windows-Server-0078D4?style=for-the-badge&logo=windows&logoColor=white)
+<p>
+  <img src="https://img.shields.io/badge/AWS-Cloud-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white" />
+  <img src="https://img.shields.io/badge/Terraform-IaC-844FBA?style=for-the-badge&logo=terraform&logoColor=white" />
+  <img src="https://img.shields.io/badge/Ansible-Automation-EE0000?style=for-the-badge&logo=ansible&logoColor=white" />
+  <img src="https://img.shields.io/badge/Docker-Containers-2496ED?style=for-the-badge&logo=docker&logoColor=white" />
+  <img src="https://img.shields.io/badge/Zabbix-Monitoring-D40000?style=for-the-badge&logo=zabbix&logoColor=white" />
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/Linux-Ubuntu%2024.04-E95420?style=flat-square&logo=ubuntu&logoColor=white" />
+  <img src="https://img.shields.io/badge/Windows-Server%202022-0078D4?style=flat-square&logo=windows&logoColor=white" />
+  <img src="https://img.shields.io/badge/WinRM-HTTPS%205986-2EA44F?style=flat-square" />
+  <img src="https://img.shields.io/badge/SSH-22-2EA44F?style=flat-square" />
+  <img src="https://img.shields.io/badge/Zabbix%20Agent%202-10050-D40000?style=flat-square" />
+</p>
+
+**Projet DevOps & Cloud réalisé pour automatiser le déploiement, la configuration et la supervision d'une infrastructure hybride Linux / Windows sur AWS.**
 
 </div>
 
@@ -16,478 +28,523 @@
 
 ## 🎯 Objectif du projet
 
-L'objectif de ce laboratoire est de déployer sur **AWS** une infrastructure de supervision centralisée avec **Zabbix** afin de monitorer un environnement hybride composé d'un serveur Linux et d'un serveur Windows.
+L'objectif de ce lab est de construire une plateforme de supervision centralisée sur AWS en combinant plusieurs briques DevOps :
 
-Le projet permet notamment de :
-
-- déployer une infrastructure réseau AWS dédiée ;
-- héberger Zabbix Server sur une instance EC2 ;
-- conteneuriser Zabbix avec Docker ;
-- installer Zabbix Agent 2 sur Linux et Windows ;
-- superviser CPU, mémoire, disponibilité et services ;
-- détecter automatiquement les indisponibilités ;
-- appliquer des règles de sécurité basées sur le principe du moindre privilège.
+- **Terraform** pour provisionner l'infrastructure AWS ;
+- **Ansible** pour configurer les serveurs Linux et Windows ;
+- **Docker Compose** pour déployer Zabbix Server et MySQL ;
+- **Zabbix Agent 2** pour superviser Linux, Windows et le serveur Zabbix ;
+- **Ansible Vault** pour protéger les secrets ;
+- **WinRM HTTPS** pour l'administration automatisée de Windows ;
+- des **Security Groups restrictifs** pour appliquer le principe du moindre privilège.
 
 ---
 
 ## 🏗️ Architecture
 
-```text
-                         INTERNET
-                             │
-                     Internet Gateway
-                             │
-                    ┌─────────────────┐
-                    │      AWS VPC    │
-                    │   10.0.0.0/16   │
-                    └────────┬────────┘
-                             │
-                    ┌─────────────────┐
-                    │ Zabbix Subnet   │
-                    │  10.0.1.0/24    │
-                    └────────┬────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              │              │              │
-              ▼              ▼              ▼
-      ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-      │ Zabbix Server│ │ Linux Server │ │Windows Server│
-      │ 10.0.1.72    │ │ 10.0.1.82   │ │10.0.1.233   │
-      │ Docker       │ │ Ubuntu       │ │Windows      │
-      │ Zabbix       │ │ Agent 2      │ │Agent 2      │
-      └──────────────┘ └──────────────┘ └──────────────┘
+```mermaid
+flowchart TB
+    Internet((Internet))
+
+    subgraph AWS["☁️ AWS - eu-west-1"]
+        subgraph VPC["VPC 10.0.0.0/16"]
+            subgraph SUBNET["Public Subnet 10.0.1.0/24"]
+
+                ZS["🖥️ Zabbix-Server<br/>Ubuntu 24.04<br/>Docker + Zabbix Agent 2"]
+                LS["🐧 Linux-Server<br/>Ubuntu 24.04<br/>Zabbix Agent 2"]
+                WS["🪟 Windows-Server<br/>Windows Server 2022<br/>Zabbix Agent 2"]
+
+            end
+        end
+    end
+
+    subgraph DOCKER["🐳 Docker Compose sur Zabbix-Server"]
+        MYSQL["MySQL 8.0"]
+        INIT["server-db-init"]
+        ZABBIX["Zabbix Server 7.4"]
+        WEB["Zabbix Web"]
+    end
+
+    Internet --> ZS
+    Internet --> LS
+    Internet --> WS
+
+    ZS --> DOCKER
+    MYSQL --> INIT
+    INIT --> ZABBIX
+    ZABBIX --> WEB
+
+    ZABBIX -->|"TCP 10050"| LS
+    ZABBIX -->|"TCP 10050"| WS
+    ZABBIX -->|"TCP 10050"| ZS
 ```
 
 ---
 
-## ☁️ Infrastructure AWS
+## 🧰 Stack technique
 
-| Ressource | Configuration |
+| Domaine | Technologies |
 |---|---|
-| VPC | `10.0.0.0/16` |
-| Subnet | `10.0.1.0/24` |
-| Zabbix Server | `10.0.1.72` |
-| Linux Server | `10.0.1.82` |
-| Windows Server | `10.0.1.233` |
-| Cloud Provider | AWS |
-| Monitoring | Zabbix |
-| Conteneurisation | Docker |
+| ☁️ Cloud | AWS, EC2, VPC, Subnet, Internet Gateway, Route Tables |
+| 🏗️ Infrastructure as Code | Terraform |
+| ⚙️ Configuration Management | Ansible |
+| 🔐 Secrets | Ansible Vault |
+| 🐳 Conteneurs | Docker, Docker Compose |
+| 📊 Monitoring | Zabbix Server 7.4, Zabbix Agent 2 |
+| 🐧 Linux | Ubuntu Server 24.04 |
+| 🪟 Windows | Windows Server 2022 |
+| 🔑 Administration | SSH, RDP, WinRM HTTPS |
+| 💻 Scripting | Bash, PowerShell |
 
 ---
 
-## 🔐 Sécurité réseau
+# 1️⃣ Provisioning AWS avec Terraform
 
-Les règles réseau ont été configurées selon le principe du **moindre privilège**.
+Terraform est utilisé pour créer automatiquement l'infrastructure AWS.
 
-| Service | Port | Source |
-|---|---:|---|
-| SSH | `22` | My IP |
-| HTTP | `80` | My IP |
-| HTTPS | `443` | My IP |
-| RDP | `3389` | My IP |
-| Zabbix Agent | `10050` | Réseau privé `10.0.1.0/24` |
-| Zabbix Server | `10051` | Réseau privé `10.0.1.0/24` |
+### Ressources créées
 
-### Pourquoi utiliser `My IP` ?
+- VPC `10.0.0.0/16`
+- Subnet public `10.0.1.0/24`
+- Internet Gateway
+- Route Table
+- Association Route Table / Subnet
+- Key Pair
+- Security Group Zabbix
+- Security Group Linux
+- Security Group Windows
+- EC2 Zabbix Server
+- EC2 Linux Server
+- EC2 Windows Server
 
-Les ports d'administration comme SSH, RDP et l'interface Web Zabbix ne sont pas ouverts à `0.0.0.0/0`.
+### Structure Terraform
 
-Ils sont volontairement limités à l'adresse IP de l'administrateur.
-
-Cela permet de :
-
-- réduire la surface d'attaque ;
-- limiter les tentatives de connexion externes ;
-- éviter d'exposer inutilement les interfaces d'administration ;
-- respecter le principe du moindre privilège.
-
----
-
-## 🐳 Déploiement de Zabbix avec Docker
-
-Zabbix Server est déployé avec Docker.
-
-Les principaux composants utilisés sont :
-
-- Zabbix Server
-- Zabbix Web
-- MySQL
-- Docker Compose
-
-Démarrage des conteneurs :
-
-```bash
-docker compose up -d
+```text
+terraform/
+├── providers.tf
+├── variables.tf
+├── main.tf
+├── security.tf
+├── instances.tf
+└── outputs.tf
 ```
 
-Vérification :
+### Commandes principales
 
 ```bash
-docker compose ps
+terraform init
+terraform fmt
+terraform validate
+terraform plan
+terraform apply
 ```
 
-Consultation des logs :
+Les outputs Terraform permettent ensuite de récupérer les différentes informations nécessaires à l'administration :
 
 ```bash
-docker compose logs
+terraform output
 ```
 
 ---
 
-## 🐧 Supervision du serveur Linux
+# 2️⃣ Sécurité réseau
 
-Le serveur Linux utilise **Zabbix Agent 2**.
+Le projet applique le principe du **moindre privilège**.
 
-Vérifier le service :
+Les accès administratifs ne sont pas ouverts à tout Internet.
 
-```bash
-sudo systemctl status zabbix-agent2
-```
+### 🔴 Zabbix Server
 
-Démarrer le service :
+| Port | Usage | Source |
+|---|---|---|
+| `22` | SSH | IP administrateur uniquement |
+| `80` | Interface Web Zabbix | IP administrateur uniquement |
+| `10050` | Zabbix Agent 2 | Réseau privé AWS |
+| `10051` | Zabbix Server | Réseau privé AWS |
 
-```bash
-sudo systemctl start zabbix-agent2
-```
+### 🟢 Linux Server
 
-Arrêter le service :
+| Port | Usage | Source |
+|---|---|---|
+| `22` | SSH | IP administrateur uniquement |
+| `10050` | Zabbix Agent 2 | Réseau privé AWS |
 
-```bash
-sudo systemctl stop zabbix-agent2
-```
+### 🔵 Windows Server
 
-Redémarrer le service :
+| Port | Usage | Source |
+|---|---|---|
+| `3389` | RDP | IP administrateur uniquement |
+| `5986` | WinRM HTTPS | IP administrateur uniquement |
+| `10050` | Zabbix Agent 2 | Réseau privé AWS |
 
-```bash
-sudo systemctl restart zabbix-agent2
-```
+> Les flux de supervision entre Zabbix et les agents utilisent principalement le réseau privé AWS.
 
-Vérifier le port 10050 :
+---
 
-```bash
-sudo ss -lntp | grep 10050
+# 3️⃣ Automatisation avec Ansible
+
+Après le provisioning Terraform, Ansible prend en charge la configuration des machines.
+
+### Structure Ansible
+
+```text
+ansible/
+├── ansible.cfg
+├── inventory.example.ini
+│
+├── group_vars/
+│   ├── zabbix/
+│   │   └── vault.example.yml
+│   └── windows/
+│       └── vault.example.yml
+│
+└── playbooks/
+    ├── zabbix-server.yml
+    ├── deploy-zabbix.yml
+    ├── linux-agent.yml
+    ├── windows-agent.yml
+    └── zabbix-server-agent.yml
 ```
 
 ---
 
-## 🪟 Supervision du serveur Windows
+## 🐳 Installation de Docker avec Ansible
 
-Le serveur Windows utilise également **Zabbix Agent 2**.
+Le playbook `zabbix-server.yml` automatise notamment :
 
-Vérifier le service :
+- installation des dépendances ;
+- ajout du dépôt officiel Docker ;
+- installation de Docker Engine ;
+- installation de Docker Compose ;
+- activation du service Docker ;
+- ajout de l'utilisateur Ubuntu au groupe Docker ;
+- vérification des versions installées.
 
-```powershell
-Get-Service "Zabbix Agent 2"
-```
-
-Démarrer le service :
-
-```powershell
-Start-Service "Zabbix Agent 2"
-```
-
-Arrêter le service :
-
-```powershell
-Stop-Service "Zabbix Agent 2"
-```
-
-Vérifier le port 10050 :
-
-```powershell
-netstat -ano | findstr :10050
+```bash
+ansible-playbook playbooks/zabbix-server.yml
 ```
 
 ---
 
-## 📊 Métriques supervisées
+# 4️⃣ Déploiement Zabbix avec Docker Compose
 
-Zabbix collecte plusieurs métriques système :
+Le serveur Zabbix est déployé sous forme de conteneurs.
 
-- utilisation CPU ;
-- mémoire RAM ;
-- espace disque ;
-- disponibilité des hôtes ;
-- services système ;
-- processus ;
-- interfaces réseau ;
-- charge système.
+```text
+docker/
+└── compose.yaml
+```
+
+### Services
+
+| Service | Rôle |
+|---|---|
+| `mysql` | Base de données |
+| `server-db-init` | Initialisation contrôlée du schéma Zabbix |
+| `zabbix-server` | Moteur de supervision |
+| `zabbix-web` | Interface Web |
+
+### Ordre de démarrage
+
+```text
+MySQL
+  │
+  ▼
+Healthcheck OK
+  │
+  ▼
+server-db-init
+  │
+  ▼
+Initialisation DB réussie
+  │
+  ▼
+Zabbix Server
+  │
+  ▼
+Zabbix Web
+```
+
+Cette organisation évite le problème d'initialisation partielle de la base de données rencontré lors des premiers essais.
 
 ---
 
-## ✅ Hôtes supervisés
+# 5️⃣ Gestion sécurisée des secrets
 
-Les deux serveurs sont correctement enregistrés dans Zabbix.
+Les secrets ne sont **pas stockés en clair dans GitHub**.
+
+Le projet utilise **Ansible Vault** pour protéger notamment :
+
+- mot de passe MySQL ;
+- mot de passe root MySQL ;
+- mot de passe Administrator Windows.
+
+Les vrais fichiers Vault sont ignorés par Git.
+
+Des fichiers d'exemple sont fournis :
+
+```text
+ansible/group_vars/zabbix/vault.example.yml
+ansible/group_vars/windows/vault.example.yml
+```
+
+Exemple :
+
+```yaml
+ansible_password: "CHANGE_ME"
+```
+
+---
+
+# 6️⃣ Supervision Linux
+
+Le playbook :
+
+```text
+playbooks/linux-agent.yml
+```
+
+automatise :
+
+- ajout du dépôt Zabbix 7.4 ;
+- installation de Zabbix Agent 2 ;
+- configuration du serveur Zabbix ;
+- configuration des checks actifs et passifs ;
+- configuration du hostname ;
+- activation du service ;
+- vérification du port TCP `10050`.
+
+### Résultat
 
 ```text
 Linux-Server
-10.0.1.82:10050
-Status : Available
+ZBX ✅
+```
 
+---
+
+# 7️⃣ Supervision Windows
+
+Windows est administré par Ansible à travers :
+
+```text
+WinRM HTTPS
+TCP 5986
+```
+
+Le playbook :
+
+```text
+playbooks/windows-agent.yml
+```
+
+automatise :
+
+- téléchargement du MSI Zabbix Agent 2 ;
+- installation silencieuse ;
+- configuration du serveur Zabbix ;
+- configuration du hostname ;
+- règle Windows Firewall ;
+- démarrage automatique du service ;
+- vérification du port TCP `10050`.
+
+### Résultat
+
+```text
 Windows-Server
-10.0.1.233:10050
-Status : Available
+ZBX ✅
 ```
-
-Résultats :
-
-- ✅ Linux Server supervisé
-- ✅ Windows Server supervisé
-- ✅ Collecte des métriques fonctionnelle
-- ✅ Communication par IP privées
-- ✅ Interface Web Zabbix opérationnelle
 
 ---
 
-## 📈 Monitoring CPU Windows
+# 8️⃣ Supervision du serveur Zabbix lui-même
 
-Zabbix collecte les métriques CPU du serveur Windows.
+Le serveur qui héberge la plateforme de monitoring est également supervisé.
 
-![Windows CPU Monitoring](screenshots/05-windows-cpu.png)
+Zabbix Agent 2 est installé directement sur l'instance Ubuntu qui héberge Docker.
 
-Les métriques observées incluent notamment :
+Cela permet de surveiller :
 
-- CPU utilization
-- CPU user time
-- CPU system time
-- CPU queue
+- CPU ;
+- mémoire ;
+- stockage ;
+- réseau ;
+- uptime ;
+- processus ;
+- disponibilité système.
+
+### Résultat
+
+```text
+Zabbix-Server
+ZBX ✅
+```
 
 ---
 
-## 🧠 Monitoring mémoire Linux
+# ✅ Résultat final
 
-La mémoire du serveur Linux est également supervisée.
+Les trois serveurs sont désormais supervisés depuis une seule plateforme.
 
-![Linux Memory Monitoring](screenshots/06-linux-memory.png)
-
-Les métriques principales sont :
-
-- Total memory
-- Available memory
-- Memory utilization
+| Hôte | OS | Agent | État |
+|---|---|---|---|
+| Linux-Server | Ubuntu 24.04 | Zabbix Agent 2 | 🟢 Disponible |
+| Windows-Server | Windows Server 2022 | Zabbix Agent 2 | 🟢 Disponible |
+| Zabbix-Server | Ubuntu 24.04 | Zabbix Agent 2 | 🟢 Disponible |
 
 ---
 
-## 🚨 Simulation d'incidents
+# 🚨 Détection d'incidents
 
-Afin de vérifier la capacité de Zabbix à détecter une panne, les agents ont été volontairement arrêtés.
+Le projet ne se limite pas à afficher des métriques.
 
-### Linux
+Des tests d'incidents ont été réalisés afin de vérifier le fonctionnement réel de la supervision :
 
-Arrêt :
+- arrêt volontaire de Zabbix Agent 2 ;
+- indisponibilité temporaire d'un serveur ;
+- détection automatique de services Windows arrêtés ;
+- remontée d'événements dans l'interface Zabbix ;
+- retour automatique à l'état disponible après résolution.
 
-```bash
-sudo systemctl stop zabbix-agent2
+Cela permet de valider :
+
+```text
+Détection
+   ↓
+Création d'un problème
+   ↓
+Diagnostic
+   ↓
+Remise en service
+   ↓
+Retour à l'état OK
 ```
-
-Vérification :
-
-```bash
-sudo systemctl status zabbix-agent2
-```
-
-Restauration :
-
-```bash
-sudo systemctl start zabbix-agent2
-```
-
-### Windows
-
-Arrêt :
-
-```powershell
-Stop-Service "Zabbix Agent 2"
-```
-
-Vérification :
-
-```powershell
-Get-Service "Zabbix Agent 2"
-```
-
-Restauration :
-
-```powershell
-Start-Service "Zabbix Agent 2"
-```
-
-Zabbix détecte l'indisponibilité de l'agent puis confirme le retour à l'état normal après redémarrage du service.
 
 ---
 
-## ✅ Résultats obtenus
+# 📸 Aperçu du projet
 
-| Test | Résultat |
-|---|---|
-| Déploiement AWS | ✅ Réussi |
-| Configuration du VPC | ✅ Réussie |
-| Configuration du subnet | ✅ Réussie |
-| Security Groups | ✅ Configurés |
-| Zabbix Server | ✅ Fonctionnel |
-| Linux Agent | ✅ Fonctionnel |
-| Windows Agent | ✅ Fonctionnel |
-| Monitoring CPU | ✅ Fonctionnel |
-| Monitoring mémoire | ✅ Fonctionnel |
-| Détection d'incident | ✅ Fonctionnelle |
-| Retour à l'état normal | ✅ Fonctionnel |
-
----
-
-## 📸 Captures du projet
-
-### Infrastructure EC2
+## ☁️ Instances EC2
 
 ![AWS EC2](screenshots/01-aws-instances.png)
 
-### VPC et Subnet
+---
 
-![AWS VPC](screenshots/02-vpc-subnet.png)
+## 🔐 Security Groups
 
-### Security Group
+![AWS Security Groups](screenshots/03-security-group.png)
 
-![AWS Security Group](screenshots/03-security-group.png)
+---
 
-### Hôtes Zabbix
+## 📊 Hosts Zabbix
 
 ![Zabbix Hosts](screenshots/04-zabbix-hosts.png)
 
-### Monitoring CPU Windows
+---
+
+## 📈 Monitoring Windows
 
 ![Windows CPU](screenshots/05-windows-cpu.png)
 
-### Monitoring mémoire Linux
+---
 
-![Linux Memory](screenshots/06-linux-memory.png)
+# 🔄 Workflow DevOps
 
-### Détection d'incident
-
-![Incident Detection](screenshots/07-incident-detection.png)
+```mermaid
+flowchart LR
+    TF["🟣 Terraform"] --> AWS["🟠 AWS"]
+    AWS --> ANS["🔴 Ansible"]
+    ANS --> LINUX["🐧 Linux"]
+    ANS --> WINDOWS["🪟 Windows"]
+    ANS --> DOCKER["🐳 Docker"]
+    DOCKER --> ZABBIX["🔴 Zabbix"]
+    LINUX --> MON["📊 Monitoring"]
+    WINDOWS --> MON
+    ZABBIX --> MON
+```
 
 ---
 
-## 🛠️ Technologies utilisées
+# 🧠 Compétences mises en pratique
 
-<div align="center">
+<p>
+  <img src="https://img.shields.io/badge/Infrastructure%20as%20Code-Terraform-844FBA?style=flat-square" />
+  <img src="https://img.shields.io/badge/Configuration%20Management-Ansible-EE0000?style=flat-square" />
+  <img src="https://img.shields.io/badge/Cloud-AWS-FF9900?style=flat-square" />
+  <img src="https://img.shields.io/badge/Containers-Docker-2496ED?style=flat-square" />
+  <img src="https://img.shields.io/badge/Monitoring-Zabbix-D40000?style=flat-square" />
+  <img src="https://img.shields.io/badge/Linux-Administration-E95420?style=flat-square" />
+  <img src="https://img.shields.io/badge/Windows-Administration-0078D4?style=flat-square" />
+  <img src="https://img.shields.io/badge/Security-Least%20Privilege-2EA44F?style=flat-square" />
+</p>
 
-![AWS](https://img.shields.io/badge/Amazon_AWS-232F3E?style=for-the-badge&logo=amazonaws&logoColor=white)
-![EC2](https://img.shields.io/badge/AWS_EC2-FF9900?style=for-the-badge&logo=amazonec2&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-![Zabbix](https://img.shields.io/badge/Zabbix-D40000?style=for-the-badge&logo=zabbix&logoColor=white)
-![Ubuntu](https://img.shields.io/badge/Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
-![Windows](https://img.shields.io/badge/Windows_Server-0078D4?style=for-the-badge&logo=windows&logoColor=white)
-![PowerShell](https://img.shields.io/badge/PowerShell-5391FE?style=for-the-badge&logo=powershell&logoColor=white)
-![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
-
-</div>
-
----
-
-## 🧰 Compétences mises en pratique
-
-- AWS
-- EC2
-- VPC
-- Subnetting
+- Infrastructure as Code
+- automatisation Cloud
+- administration Linux
+- administration Windows
+- configuration réseau AWS
 - Security Groups
-- Linux Administration
-- Windows Server
-- Docker
-- Docker Compose
-- Zabbix
-- Zabbix Agent 2
-- Monitoring
-- Networking
-- Troubleshooting
-- PowerShell
-- Bash
-- Sécurité Cloud
+- Docker / Docker Compose
+- Terraform
+- Ansible
+- Ansible Vault
+- SSH
+- WinRM
+- monitoring
+- troubleshooting
+- gestion d'incidents
+- principe du moindre privilège
 
 ---
 
-## 🔒 Sécurité du repository
+# 🔮 Améliorations possibles
 
-Aucune information sensible ne doit être publiée dans ce repository.
+- génération automatique de l'inventaire Ansible depuis les outputs Terraform ;
+- Elastic IP pour stabiliser l'accès public au serveur Zabbix ;
+- HTTPS sur l'interface Zabbix ;
+- alertes e-mail / Slack ;
+- monitoring Docker avancé ;
+- pipeline CI/CD pour Terraform et Ansible ;
+- backend distant Terraform ;
+- stockage du state dans S3 ;
+- mécanisme de verrouillage du state ;
+- modularisation Terraform ;
+- rôles Ansible réutilisables.
 
-Les éléments suivants doivent être exclus :
+---
+
+# 🔒 Sécurité du dépôt
+
+Les éléments suivants sont volontairement exclus du dépôt :
 
 ```text
-AWS Access Key
-AWS Secret Access Key
-Private SSH Keys
-.pem files
-Passwords
-.env files
-Tokens
-Credentials
-```
-
-Exemple de `.gitignore` recommandé :
-
-```gitignore
 .env
-.env.*
 *.pem
 *.key
-*.ppk
-credentials
-.aws/
-.vscode/
-.DS_Store
-Thumbs.db
+terraform.tfstate
+tfplan
+ansible/inventory.ini
+ansible/group_vars/*/vault.yml
 ```
 
----
-
-## 🚀 Améliorations futures
-
-Les prochaines évolutions possibles sont :
-
-- automatisation de l'infrastructure avec Terraform ;
-- Infrastructure as Code ;
-- notifications Zabbix par email ;
-- HTTPS pour l'interface Web ;
-- intégration avec AWS CloudWatch ;
-- ajout de Grafana ;
-- architecture avec subnets publics et privés ;
-- reverse proxy ;
-- CI/CD ;
-- automatisation complète du déploiement.
+Les fichiers `.example` permettent de reproduire le projet sans exposer les secrets utilisés dans l'environnement réel.
 
 ---
 
-## 📚 Compétences renforcées
-
-Ce projet m'a permis de renforcer mes compétences en :
-
-- conception d'une architecture réseau AWS ;
-- administration Linux et Windows ;
-- sécurisation des accès Cloud ;
-- conteneurisation avec Docker ;
-- monitoring avec Zabbix ;
-- collecte et analyse de métriques ;
-- détection d'incidents ;
-- troubleshooting réseau et système ;
-- administration de services Linux et Windows.
-
----
+<div align="center">
 
 ## 👨‍💻 Auteur
 
-<div align="center">
-
 ### Nesta Kengni
 
-**DevOps & Cloud Engineer**
+**DevOps & Cloud Infrastructure**
 
-AWS • Docker • Kubernetes • Terraform • Linux • CI/CD • Monitoring
+[![GitHub](https://img.shields.io/badge/GitHub-nestakengni-181717?style=for-the-badge&logo=github)](https://github.com/nestakengni)
 
-</div>
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Nesta%20Kengni-0A66C2?style=for-the-badge&logo=linkedin)](https://www.linkedin.com/in/nesta-kengni/)
 
 ---
 
-<div align="center">
-
-### ⭐ AWS • DevOps • Cloud • Monitoring • Infrastructure
+⭐ **Si ce projet vous intéresse, n'hésitez pas à consulter le dépôt et les différentes étapes d'automatisation.**
 
 </div>

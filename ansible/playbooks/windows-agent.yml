@@ -1,0 +1,68 @@
+---
+- name: Install and configure Zabbix Agent 2 on Windows
+  hosts: windows
+  gather_facts: false
+
+  vars:
+    zabbix_server_ip: "10.0.1.252"
+    zabbix_agent_version: "7.4.15"
+    zabbix_agent_msi: "C:\\Temp\\zabbix_agent2.msi"
+
+  tasks:
+    - name: Create temporary directory
+      ansible.windows.win_file:
+        path: C:\Temp
+        state: directory
+
+    - name: Download Zabbix Agent 2 MSI
+      ansible.windows.win_get_url:
+        url: "https://cdn.zabbix.com/zabbix/binaries/stable/7.4/{{ zabbix_agent_version }}/zabbix_agent2-{{ zabbix_agent_version }}-windows-amd64-openssl.msi"
+        dest: "{{ zabbix_agent_msi }}"
+
+    - name: Install Zabbix Agent 2
+      ansible.windows.win_package:
+        path: "{{ zabbix_agent_msi }}"
+        state: present
+        arguments:
+          - /qn
+          - "SERVER={{ zabbix_server_ip }}"
+          - "SERVERACTIVE={{ zabbix_server_ip }}"
+          - "HOSTNAME=Windows-Server"
+          - "SKIP=fw"
+
+    - name: Allow Zabbix Agent from Zabbix Server only
+      community.windows.win_firewall_rule:
+        name: Zabbix Agent 2 - TCP 10050
+        localport: 10050
+        protocol: tcp
+        direction: in
+        action: allow
+        remoteip: "{{ zabbix_server_ip }}"
+        enabled: true
+        state: present
+
+    - name: Ensure Zabbix Agent 2 is running
+      ansible.windows.win_service:
+        name: "Zabbix Agent 2"
+        start_mode: auto
+        state: started
+
+    - name: Check Zabbix Agent 2 service
+      ansible.windows.win_shell: |
+        Get-Service "Zabbix Agent 2" |
+        Select-Object Name, Status, StartType
+      register: zabbix_service
+
+    - name: Display service status
+      ansible.builtin.debug:
+        var: zabbix_service.stdout_lines
+
+    - name: Check port 10050
+      ansible.windows.win_shell: |
+        Get-NetTCPConnection -LocalPort 10050 -State Listen |
+        Select-Object LocalAddress, LocalPort, State
+      register: zabbix_port
+
+    - name: Display port 10050 status
+      ansible.builtin.debug:
+        var: zabbix_port.stdout_lines
